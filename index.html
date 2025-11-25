@@ -3,74 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebAR Pixel Fix</title>
+    <title>3D Test Mode</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; background-color: black; }
+        body { margin: 0; overflow: hidden; background-color: #333; }
         
-        /* 【重要】Pixel/Android用レイヤー修正 */
-        /* カメラ映像を一番奥へ */
-        #cam-video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 0; /* 一番奥 */
-        }
-
-        /* A-Frameの描画キャンバスを強制的に手前へ */
-        .a-canvas {
-            z-index: 999 !important;
-            background-color: transparent !important;
-            position: absolute !important;
-            top: 0;
-            left: 0;
-        }
-
-        /* UI */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 1000;
-            display: flex; flex-direction: column; justify-content: space-between;
+            pointer-events: none; z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
-        #msg {
-            background: rgba(0,0,0,0.7);
-            color: #00ffcc;
-            padding: 10px;
+        
+        .msg-box {
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
             text-align: center;
-            margin-top: 50px;
-            font-size: 16px;
+            border: 2px solid #00ffcc;
+            pointer-events: auto;
+        }
+
+        button {
+            margin-top: 15px;
+            padding: 10px 30px;
+            font-size: 18px;
+            background: #00ffcc;
+            border: none;
+            cursor: pointer;
             font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <video id="cam-video" autoplay muted playsinline></video>
-
     <div id="ui-layer">
-        <div id="msg">
-            画面中央に「青い箱」が見えますか？<br>
-            見えたらスマホを左右に回して<br>
-            「赤い敵」を探してください。
+        <div class="msg-box" id="msg-box">
+            <h2>3D表示テスト</h2>
+            <p>
+                今はカメラをOFFにしています。<br>
+                背景が黒い状態で、<br>
+                <strong>目の前の「青い箱」</strong>と<br>
+                <strong>周りの「赤い敵」</strong>が見えますか？
+            </p>
+            <p style="font-size: 12px; color: #aaa;">
+                ※見えない場合、ブラウザの<br>「ハードウェアアクセラレーション」が<br>無効になっている可能性があります。
+            </p>
         </div>
     </div>
 
-    <a-scene vr-mode-ui="enabled: false" embedded renderer="alpha: true; antialias: true; colorManagement: true;">
+    <a-scene background="color: black">
         
         <a-entity id="camera-rig">
             <a-camera position="0 1.6 0" look-controls="enabled: true" wasd-controls="enabled: false">
-                
                 <a-box color="blue" position="0 -0.5 -1.5" scale="0.3 0.3 0.3" 
                        animation="property: rotation; to: 0 360 0; loop: true; dur: 3000">
                 </a-box>
                 
                 <a-ring color="white" radius-inner="0.02" radius-outer="0.03" position="0 0 -1"></a-ring>
-            
             </a-camera>
         </a-entity>
 
@@ -84,35 +75,5 @@
 
     </a-scene>
 
-    <script>
-        // カメラ起動処理
-        const video = document.getElementById('cam-video');
-        
-        async function startCamera() {
-            try {
-                // PixelなどAndroidの背面カメラを取得
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: { exact: "environment" } // 背面カメラを強制
-                    }, 
-                    audio: false 
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                console.warn("背面カメラの取得に失敗、通常モードで試行します", err);
-                try {
-                    const streamKv = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                    video.srcObject = streamKv;
-                } catch(e) {
-                    alert("カメラの起動に失敗しました。ブラウザの設定を確認してください。");
-                }
-            }
-        }
-
-        // ページ読み込み完了時にカメラ起動
-        window.onload = () => {
-            startCamera();
-        };
-    </script>
 </body>
 </html>
