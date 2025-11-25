@@ -3,212 +3,387 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebAR Sky Shooter</title>
+    <title>WebAR Advanced Shooter</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
     
     <style>
-        /* UIレイヤーのスタイル */
-        body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', sans-serif; }
+        body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', sans-serif; touch-action: none; }
         
-        /* スコア表示 */
+        /* --- UI Layer --- */
         #ui-layer {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* 3Dシーンへのタップを妨げない */
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
             z-index: 10;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
         }
 
+        /* Header: HP & Score */
         #header {
             padding: 20px;
-            color: #00ffcc;
-            text-shadow: 0 0 5px rgba(0,0,0,0.5);
-            font-size: 24px;
-            font-weight: bold;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
             display: flex;
             justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-box { color: white; font-weight: bold; text-shadow: 0 0 5px black; }
+        #score-display { font-size: 24px; color: #00ffcc; }
+        
+        /* HP Bar */
+        #hp-container { width: 150px; height: 20px; background: #333; border: 2px solid white; border-radius: 10px; overflow: hidden; }
+        #hp-bar { width: 100%; height: 100%; background: #00ff00; transition: width 0.3s, background 0.3s; }
+
+        /* Damage Overlay (Flash Red) */
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: red; opacity: 0; pointer-events: none; transition: opacity 0.1s;
         }
 
-        #message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+        /* Start / Game Over Screen */
+        #message-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             color: white;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-            pointer-events: auto; /* ボタンを押せるようにする */
+            pointer-events: auto;
+            z-index: 20;
         }
-
+        h1 { margin: 0 0 10px 0; color: #00ffcc; text-transform: uppercase; }
+        p { margin: 0 0 20px 0; color: #ccc; text-align: center; line-height: 1.5; }
         button {
-            background: #00ffcc;
-            border: none;
-            padding: 10px 20px;
-            font-size: 18px;
-            border-radius: 5px;
-            cursor: pointer;
-            color: #000;
-            font-weight: bold;
+            background: #00ffcc; border: none; padding: 15px 40px;
+            font-size: 20px; border-radius: 30px; cursor: pointer;
+            color: #000; font-weight: bold; box-shadow: 0 0 15px #00ffcc;
+            transition: transform 0.1s;
         }
+        button:active { transform: scale(0.95); }
 
-        /* カメラ背景用のビデオ要素（A-Frameの背景として使用） */
+        /* Video Background */
         #cam-video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: -1;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: -1;
         }
     </style>
 </head>
 <body>
 
+    <div id="damage-overlay"></div>
+    
     <div id="ui-layer">
         <div id="header">
-            <span>SCORE: <span id="score">0</span></span>
-            <span style="font-size: 14px; color: white;">AR SHOOTER</span>
+            <div class="status-box">
+                HP
+                <div id="hp-container"><div id="hp-bar"></div></div>
+            </div>
+            <div class="status-box">
+                SCORE: <span id="score-display">0</span>
+            </div>
         </div>
-        <div id="message">
-            <h2>AR Sky Shooter</h2>
-            <p>スマホを動かして敵を探せ！<br>画面タップで発射</p>
-            <button id="start-btn">GAME START</button>
-        </div>
+    </div>
+
+    <div id="message-screen">
+        <h1>AR Battle</h1>
+        <p>360度から迫る敵を撃ち落とせ！<br>敵の攻撃を受けるとHPが減ります。</p>
+        <button id="start-btn">MISSION START</button>
     </div>
 
     <video id="cam-video" autoplay muted playsinline></video>
 
-    <a-scene vr-mode-ui="enabled: false" embedded renderer="alpha: true">
+    <a-scene vr-mode-ui="enabled: false" embedded renderer="alpha: true; antialias: true">
         
         <a-assets>
-            <img id="enemy-tex" src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/cubes.jpg"> </a-assets>
+            <a-asset-item id="enemy-model-glb" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb"></a-asset-item>
+        </a-assets>
 
-        <a-entity id="camera-rig">
-            <a-camera position="0 1.6 0" look-controls="enabled: true" wasd-controls="enabled: false">
+        <a-entity id="camera-rig" position="0 0 0">
+            <a-camera id="player-camera" position="0 1.6 0" look-controls="enabled: true" wasd-controls="enabled: false">
                 <a-entity 
                     cursor="fuse: false"
                     position="0 0 -1"
                     geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
-                    material="color: #00ffcc; shader: flat"
-                    animation__click="property: scale; startEvents: click; easing: easeInCubic; dur: 150; from: 0.1 0.1 0.1; to: 1 1 1"
-                    raycaster="objects: .enemy">
+                    material="color: #00ffcc; shader: flat; opacity: 0.8"
+                    animation__click="property: scale; startEvents: click; from: 0.5 0.5 0.5; to: 1 1 1; dur: 150"
+                    raycaster="objects: .clickable">
                 </a-entity>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#FFF"></a-light>
-        <a-light type="directional" position="-1 1 0"></a-light>
+        <a-light type="ambient" color="#888"></a-light>
+        <a-light type="directional" position="-1 2 1" intensity="1.5"></a-light>
 
-        <a-entity id="enemy-container"></a-entity>
+        <a-entity id="game-world"></a-entity>
 
     </a-scene>
 
     <script>
-        // ゲームの状態管理
-        let score = 0;
-        let isPlaying = false;
-        const scoreEl = document.getElementById('score');
-        const container = document.getElementById('enemy-container');
-        const startBtn = document.getElementById('start-btn');
-        const messageBox = document.getElementById('message');
-        const video = document.getElementById('cam-video');
+        /* * 1. Sound System (Web Audio API Synthesizer)
+         * 外部ファイルを使わず、コードで音を生成します。
+         */
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const SoundFX = {
+            playTone: (freq, type, duration) => {
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                // 音の減衰（フェードアウト）
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            },
+            shoot: () => {
+                // レーザー音のような高い音
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            },
+            explosion: () => {
+                // ノイズの代用として低い矩形波
+                SoundFX.playTone(100, 'sawtooth', 0.3);
+            },
+            damage: () => {
+                // 不協和音
+                SoundFX.playTone(150, 'square', 0.2);
+                setTimeout(()=> SoundFX.playTone(100, 'square', 0.2), 50);
+            }
+        };
 
-        // カメラの起動処理
+        /* * 2. Game Logic
+         */
+        const CONFIG = {
+            maxHP: 100,
+            enemySpawnRate: 3000, // ms
+            enemyShootRate: 2500, // ms (敵が攻撃してくる間隔)
+        };
+
+        let state = {
+            hp: CONFIG.maxHP,
+            score: 0,
+            isPlaying: false,
+            enemies: [] // 敵の管理用配列
+        };
+
+        // DOM Elements
+        const els = {
+            score: document.getElementById('score-display'),
+            hpBar: document.getElementById('hp-bar'),
+            damageOverlay: document.getElementById('damage-overlay'),
+            world: document.getElementById('game-world'),
+            messageScreen: document.getElementById('message-screen'),
+            msgTitle: document.querySelector('#message-screen h1'),
+            msgText: document.querySelector('#message-screen p'),
+            startBtn: document.getElementById('start-btn'),
+            video: document.getElementById('cam-video')
+        };
+
+        // --- Camera Setup ---
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" }, 
-                    audio: false 
+                    video: { facingMode: "environment" }, audio: false 
                 });
-                video.srcObject = stream;
-            } catch (err) {
-                console.error("Camera access denied or not available:", err);
-                alert("カメラの起動に失敗しました。設定を確認してください。");
+                els.video.srcObject = stream;
+            } catch (e) {
+                console.warn("Camera error:", e);
             }
         }
 
-        // 敵をランダムな位置に生成する関数
+        // --- Enemy Logic ---
         function spawnEnemy() {
-            if (!isPlaying) return;
+            if (!state.isPlaying) return;
 
             const enemy = document.createElement('a-entity');
-            enemy.setAttribute('class', 'enemy');
+            enemy.setAttribute('class', 'clickable enemy');
             
-            // 球面座標系を使ってプレイヤーの周囲(半径5m〜8m)にランダム配置
-            const radius = 5 + Math.random() * 3;
-            const theta = Math.random() * 360; // 水平角度
-            const phi = Math.random() * 60 - 10; // 垂直角度（あまり上すぎると首が痛いので調整）
+            // GLBモデルを読み込み (アヒル)
+            enemy.setAttribute('gltf-model', '#enemy-model-glb');
+            // サイズ調整 (モデルによって変える)
+            enemy.setAttribute('scale', '0.5 0.5 0.5');
 
-            // 座標変換 (Degree to Radian)
-            const x = radius * Math.cos(theta * Math.PI / 180);
-            const y = radius * Math.sin(phi * Math.PI / 180); // 高さはある程度制限
-            const z = radius * Math.sin(theta * Math.PI / 180);
+            // ランダム配置 (球状)
+            const r = 6 + Math.random() * 4; // 距離 6m~10m
+            const theta = Math.random() * 360;
+            const phi = Math.random() * 40 - 10; // 上下角度
+            
+            const x = r * Math.cos(theta * Math.PI / 180);
+            const y = r * Math.sin(phi * Math.PI / 180) + 1.6; // 目の高さ補正
+            const z = r * Math.sin(theta * Math.PI / 180);
 
             enemy.setAttribute('position', `${x} ${y} ${z}`);
-            
-            // 敵の見た目（赤い球体の中にドローンっぽい箱）
-            enemy.innerHTML = `
-                <a-sphere radius="0.5" color="#ff0000" opacity="0.7"></a-sphere>
-                <a-box depth="0.6" height="0.2" width="0.6" color="#333"></a-box>
-                <a-animation attribute="position" to="0 0 0" dur="10000"></a-animation>
-            `;
-            
-            // 自分の方を向く
-            enemy.setAttribute('look-at', '[camera]');
+            enemy.setAttribute('look-at', '[camera]'); // 常にプレイヤーを見る
 
-            // クリック（タップ）時のイベントリスナー
-            enemy.addEventListener('click', () => {
-                // 爆発エフェクト（簡易的に拡大して消える）
-                enemy.setAttribute('material', 'color', 'orange');
-                
-                // スコア加算
-                score += 100;
-                scoreEl.innerText = score;
+            // 浮遊アニメーション
+            enemy.setAttribute('animation', `property: position; to: ${x} ${y + 0.5} ${z}; dir: alternate; dur: 2000; loop: true`);
 
-                // 敵を削除
-                setTimeout(() => {
-                    if(enemy.parentNode) enemy.parentNode.removeChild(enemy);
-                }, 100);
+            // クリック時の処理 (撃墜)
+            enemy.addEventListener('click', () => destroyEnemy(enemy));
 
-                // 次の敵をすぐに呼ぶ（ゲーム性を高める）
-                spawnEnemy();
-            });
+            // 敵の攻撃ループを開始
+            const shootInterval = setInterval(() => {
+                if(!state.isPlaying || !enemy.parentNode) {
+                    clearInterval(shootInterval);
+                    return;
+                }
+                enemyShoot(enemy);
+            }, CONFIG.enemyShootRate + Math.random() * 1000);
 
-            container.appendChild(enemy);
+            els.world.appendChild(enemy);
+            state.enemies.push(enemy);
         }
 
-        // ゲーム開始処理
-        startBtn.addEventListener('click', () => {
-            isPlaying = true;
-            messageBox.style.display = 'none';
+        function destroyEnemy(enemy) {
+            SoundFX.explosion();
+            
+            // 爆発演出（パーティクルの代わりに拡大して消滅）
+            enemy.removeAttribute('animation');
+            enemy.setAttribute('animation__die', 'property: scale; to: 0 0 0; dur: 200; easing: easeInQuad');
+            
+            // スコア加算
+            state.score += 100;
+            els.score.innerText = state.score;
+
+            // 削除処理
+            setTimeout(() => {
+                if(enemy.parentNode) enemy.parentNode.removeChild(enemy);
+            }, 200);
+        }
+
+        // --- Enemy Attack Logic ---
+        function enemyShoot(enemyEl) {
+            // 敵の位置取得
+            const pos = enemyEl.getAttribute('position');
+            
+            // 弾の生成
+            const bullet = document.createElement('a-entity');
+            bullet.setAttribute('geometry', 'primitive: sphere; radius: 0.1');
+            bullet.setAttribute('material', 'color: red; emissive: #ff0000; emissiveIntensity: 1');
+            bullet.setAttribute('position', pos);
+            
+            // プレイヤー(カメラ)の位置へ向かうアニメーション
+            // カメラ位置は固定(0, 1.6, 0)と仮定せず、実際のカメラ位置を取得しても良いが、
+            // WebARでは基本的にカメラリグの中心(0,1.6,0)に向かって撃てば成立する
+            bullet.setAttribute('animation', `property: position; to: 0 1.6 0; dur: 1500; easing: linear`);
+
+            // 着弾判定用ループ
+            const checkHit = setInterval(() => {
+                if(!state.isPlaying) { clearInterval(checkHit); return; }
+                
+                const bPos = bullet.getAttribute('position');
+                // プレイヤー（原点付近）との距離計算
+                const dist = Math.sqrt(bPos.x**2 + (bPos.y-1.6)**2 + bPos.z**2);
+                
+                if (dist < 0.5) {
+                    // Hit!
+                    clearInterval(checkHit);
+                    if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
+                    takeDamage();
+                }
+            }, 100);
+
+            // 一定時間で消す（外れた場合）
+            setTimeout(() => {
+                clearInterval(checkHit);
+                if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
+            }, 1600);
+
+            els.world.appendChild(bullet);
+        }
+
+        function takeDamage() {
+            SoundFX.damage();
+            state.hp -= 20;
+            updateHPUI();
+            
+            // 赤いフラッシュ
+            els.damageOverlay.style.opacity = 0.5;
+            setTimeout(() => els.damageOverlay.style.opacity = 0, 200);
+
+            if (state.hp <= 0) {
+                gameOver();
+            }
+        }
+
+        function updateHPUI() {
+            const pct = Math.max(0, (state.hp / CONFIG.maxHP) * 100);
+            els.hpBar.style.width = `${pct}%`;
+            if(pct < 30) els.hpBar.style.background = 'red';
+            else els.hpBar.style.background = '#00ff00';
+        }
+
+        // --- Game Flow ---
+        function startGame() {
+            state.score = 0;
+            state.hp = CONFIG.maxHP;
+            state.isPlaying = true;
+            
+            els.score.innerText = "0";
+            updateHPUI();
+            els.world.innerHTML = ''; // リセット
+            els.messageScreen.style.display = 'none';
+
             startCamera();
             
-            // 初期敵を5体生成
-            for(let i=0; i<5; i++) {
-                spawnEnemy();
-            }
+            // 初期敵
+            spawnEnemy(); spawnEnemy();
 
-            // 定期的に敵を追加（難易度調整）
-            setInterval(() => {
-                if(document.querySelectorAll('.enemy').length < 10) {
+            // 定期スポーン
+            const gameLoop = setInterval(() => {
+                if(!state.isPlaying) {
+                    clearInterval(gameLoop);
+                    return;
+                }
+                // 画面上の敵が多すぎないように制限
+                if(document.querySelectorAll('.enemy').length < 8) {
                     spawnEnemy();
                 }
-            }, 3000);
+            }, CONFIG.enemySpawnRate);
+        }
+
+        function gameOver() {
+            state.isPlaying = false;
+            els.msgTitle.innerText = "GAME OVER";
+            els.msgText.innerHTML = `SCORE: ${state.score}<br>人類は敗北した...`;
+            els.startBtn.innerText = "RETRY";
+            els.messageScreen.style.display = 'flex';
+            
+            // 全敵削除などはリスタート時に行われる
+        }
+
+        // Input Handling
+        els.startBtn.addEventListener('click', () => {
+            // Web Audio APIはユーザ操作起点で再開する必要がある
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            SoundFX.shoot(); // テスト音
+            startGame();
         });
 
-        // 画面全体のタップイベント（A-Frameのカーソルイベントをトリガー）
-        // スマホでは画面をタップすると、カメラ中央（レティクル）にあるオブジェクトに対してclickイベントが飛ぶ仕組みを利用
-        document.body.addEventListener('click', () => {
-            // 効果音などを入れるならここ
+        // Player Shooting (Tap anywhere)
+        document.body.addEventListener('click', (e) => {
+            if(!state.isPlaying || e.target === els.startBtn) return;
+            SoundFX.shoot();
+            // 実際の判定はA-Frameのカーソルシステム(raycaster)がclickイベントを発火させる
         });
 
     </script>
