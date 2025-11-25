@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebAR Advanced Shooter</title>
+    <title>WebAR Easy Shooter</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
     
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', sans-serif; touch-action: none; }
+        
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; z-index: 10;
@@ -60,8 +61,8 @@
     </div>
 
     <div id="message-screen">
-        <h1>AR Battle</h1>
-        <p>360度から迫る敵を撃ち落とせ！<br>敵の攻撃を受けるとHPが減ります。</p>
+        <h1>AR Battle (Easy)</h1>
+        <p>巨大な敵を探して撃て！<br>敵の動きはゆっくりです。</p>
         <button id="start-btn">MISSION START</button>
     </div>
 
@@ -85,14 +86,13 @@
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#888"></a-light>
+        <a-light type="ambient" color="#FFF" intensity="1.2"></a-light>
         <a-light type="directional" position="-1 2 1" intensity="1.5"></a-light>
 
         <a-entity id="game-world"></a-entity>
     </a-scene>
 
     <script>
-        // サウンド機能
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
         const SoundFX = {
@@ -122,12 +122,12 @@
             damage: () => { SoundFX.playTone(150, 'square', 0.2); setTimeout(()=> SoundFX.playTone(100, 'square', 0.2), 50); }
         };
 
-        // --- 設定 (調整箇所) ---
+        // --- 設定 (大幅に見やすく調整) ---
         const CONFIG = {
             maxHP: 100,
-            enemySpawnRate: 1000, // 変更: 1000ms (1秒)ごとに敵が出現（以前は3000ms）
-            maxEnemies: 20,       // 変更: 画面上の最大敵数を20体に増加（以前は8体）
-            enemyShootRate: 2500,
+            enemySpawnRate: 3000, // 3秒に1体 (ゆっくり出現)
+            maxEnemies: 5,        // 同時に最大5体まで (画面がごちゃごちゃしない)
+            enemyShootRate: 6000, // 6秒に1回攻撃 (プレイヤーが探す時間を確保)
         };
 
         let state = { hp: CONFIG.maxHP, score: 0, isPlaying: false, enemies: [] };
@@ -157,12 +157,15 @@
             const enemy = document.createElement('a-entity');
             enemy.setAttribute('class', 'clickable enemy');
             enemy.setAttribute('gltf-model', '#enemy-model-glb');
-            enemy.setAttribute('scale', '0.5 0.5 0.5');
+            
+            // 【変更】サイズを大きく (2倍)
+            enemy.setAttribute('scale', '2.0 2.0 2.0');
 
-            // 出現位置の調整: プレイヤーから4〜8メートルの位置に見やすく配置
-            const r = 4 + Math.random() * 4; 
+            // 【変更】距離を近く (3m 〜 5m)
+            const r = 3 + Math.random() * 2; 
             const theta = Math.random() * 360;
-            const phi = Math.random() * 60 - 20; // -20度〜+40度
+            // 高さもあまり極端な上下には出さない (-10度〜30度)
+            const phi = Math.random() * 40 - 10; 
             
             const x = r * Math.cos(theta * Math.PI / 180);
             const y = r * Math.sin(phi * Math.PI / 180) + 1.6;
@@ -170,14 +173,17 @@
 
             enemy.setAttribute('position', `${x} ${y} ${z}`);
             enemy.setAttribute('look-at', '[camera]');
-            enemy.setAttribute('animation', `property: position; to: ${x} ${y + 0.5} ${z}; dir: alternate; dur: 2000; loop: true`);
+            
+            // 上下にふわふわ動くアニメーション
+            enemy.setAttribute('animation', `property: position; to: ${x} ${y + 0.3} ${z}; dir: alternate; dur: 2000; loop: true`);
 
             enemy.addEventListener('click', () => destroyEnemy(enemy));
 
+            // 攻撃開始
             const shootInterval = setInterval(() => {
                 if(!state.isPlaying || !enemy.parentNode) { clearInterval(shootInterval); return; }
                 enemyShoot(enemy);
-            }, CONFIG.enemyShootRate + Math.random() * 1000);
+            }, CONFIG.enemyShootRate + Math.random() * 2000);
 
             els.world.appendChild(enemy);
             state.enemies.push(enemy);
@@ -195,23 +201,24 @@
         function enemyShoot(enemyEl) {
             const pos = enemyEl.getAttribute('position');
             const bullet = document.createElement('a-entity');
-            bullet.setAttribute('geometry', 'primitive: sphere; radius: 0.1');
+            bullet.setAttribute('geometry', 'primitive: sphere; radius: 0.15'); // 弾も少し大きく
             bullet.setAttribute('material', 'color: red; emissive: #ff0000; emissiveIntensity: 1');
             bullet.setAttribute('position', pos);
-            bullet.setAttribute('animation', `property: position; to: 0 1.6 0; dur: 1500; easing: linear`);
+            // 弾の速度も少しゆっくりに (2秒かけて飛んでくる)
+            bullet.setAttribute('animation', `property: position; to: 0 1.6 0; dur: 2000; easing: linear`);
 
             const checkHit = setInterval(() => {
                 if(!state.isPlaying) { clearInterval(checkHit); return; }
                 const bPos = bullet.getAttribute('position');
                 const dist = Math.sqrt(bPos.x**2 + (bPos.y-1.6)**2 + bPos.z**2);
-                if (dist < 0.5) {
+                if (dist < 0.8) { // 当たり判定も緩く
                     clearInterval(checkHit);
                     if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
                     takeDamage();
                 }
             }, 100);
 
-            setTimeout(() => { clearInterval(checkHit); if(bullet.parentNode) bullet.parentNode.removeChild(bullet); }, 1600);
+            setTimeout(() => { clearInterval(checkHit); if(bullet.parentNode) bullet.parentNode.removeChild(bullet); }, 2100);
             els.world.appendChild(bullet);
         }
 
@@ -240,12 +247,11 @@
             els.messageScreen.style.display = 'none';
             startCamera();
             
-            // 変更: 初期スポーン数を10体に増加
-            for(let i=0; i<10; i++) spawnEnemy();
+            // 初期スポーン: 3体のみ (まず探してもらう)
+            for(let i=0; i<3; i++) spawnEnemy();
 
             const gameLoop = setInterval(() => {
                 if(!state.isPlaying) { clearInterval(gameLoop); return; }
-                // 変更: 最大数をCONFIG.maxEnemiesでチェック
                 if(document.querySelectorAll('.enemy').length < CONFIG.maxEnemies) {
                     spawnEnemy();
                 }
@@ -255,7 +261,7 @@
         function gameOver() {
             state.isPlaying = false;
             els.msgTitle.innerText = "GAME OVER";
-            els.msgText.innerHTML = `SCORE: ${state.score}<br>人類は敗北した...`;
+            els.msgText.innerHTML = `SCORE: ${state.score}<br>また挑戦してください。`;
             els.startBtn.innerText = "RETRY";
             els.messageScreen.style.display = 'flex';
         }
