@@ -3,55 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebAR Target Practice</title>
+    <title>WebAR Diagnostic Mode</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', sans-serif; touch-action: none; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
         
-        /* UI Layer */
+        /* UIレイヤー */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 10;
+            pointer-events: none; z-index: 100;
             display: flex; flex-direction: column; justify-content: space-between;
         }
 
-        /* シンプルなヘッダー（スコアのみ） */
-        #header {
-            padding: 20px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
-            display: flex; justify-content: center; align-items: center;
+        /* センサー許可・開始ボタン画面 */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            pointer-events: auto;
+            z-index: 200;
         }
-        #score-box {
-            background: rgba(0, 255, 204, 0.2);
-            border: 2px solid #00ffcc;
-            padding: 10px 30px;
-            border-radius: 30px;
-            color: #00ffcc;
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 0 0 5px rgba(0,0,0,0.5);
-            backdrop-filter: blur(5px);
+        button {
+            background: #00ff00; color: black; border: none; padding: 20px 40px;
+            font-size: 20px; font-weight: bold; border-radius: 10px; margin-top: 20px;
         }
 
-        /* スタート画面 */
-        #message-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: white; pointer-events: auto; z-index: 20;
+        /* デバッグ情報表示エリア */
+        #debug-info {
+            background: rgba(0,0,0,0.5); color: #00ff00; padding: 5px; font-size: 12px;
+            font-family: monospace;
         }
-        h1 { margin: 0 0 10px 0; color: #00ffcc; text-transform: uppercase; letter-spacing: 2px; }
-        p { margin: 0 0 30px 0; color: #ccc; text-align: center; line-height: 1.6; }
-        button {
-            background: #00ffcc; border: none; padding: 15px 50px;
-            font-size: 20px; border-radius: 50px; cursor: pointer;
-            color: #003333; font-weight: bold; box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
-            transition: transform 0.1s, background 0.2s;
+
+        /* 敵への誘導ナビゲーション */
+        #radar {
+            text-align: center; font-size: 40px; font-weight: bold; color: yellow;
+            text-shadow: 2px 2px 0 #000; padding-bottom: 50px;
         }
-        button:active { transform: scale(0.95); background: #fff; }
 
         /* 背景ビデオ */
         #cam-video {
@@ -62,186 +50,137 @@
 </head>
 <body>
 
-    <div id="ui-layer">
-        <div id="header">
-            <div id="score-box">SCORE: <span id="score-display">0</span></div>
-        </div>
-    </div>
-
-    <div id="message-screen">
-        <h1>TARGET PRACTICE</h1>
-        <p>
-            敵は攻撃してきません。<br>
-            スマホを動かして敵を探し、<br>
-            タップして撃ち落とす練習モードです。
-        </p>
-        <button id="start-btn">START</button>
-    </div>
-
     <video id="cam-video" autoplay muted playsinline></video>
 
-    <a-scene vr-mode-ui="enabled: false" embedded renderer="alpha: true; antialias: true">
-        <a-assets>
-            <a-asset-item id="enemy-model-glb" src="https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb"></a-asset-item>
-        </a-assets>
+    <div id="start-screen">
+        <h1 style="color:white; text-align:center;">システム診断モード</h1>
+        <p style="color:#ccc; text-align:center; padding:0 20px;">
+            iPhoneの方は必ず下のボタンを押して<br>「動作と方向へのアクセス」を<br>許可してください。
+        </p>
+        <button id="btn-permission">センサーを許可して開始</button>
+    </div>
 
-        <a-entity id="camera-rig" position="0 0 0">
-            <a-camera id="player-camera" position="0 1.6 0" look-controls="enabled: true" wasd-controls="enabled: false">
+    <div id="ui-layer">
+        <div id="debug-info">Waiting for sensor...</div>
+        <div id="radar">SEARCHING...</div>
+    </div>
+
+    <a-scene vr-mode-ui="enabled: false" embedded renderer="alpha: true;">
+        
+        <a-entity id="camera-rig">
+            <a-camera id="player-camera" position="0 1.6 0" look-controls="enabled: false" wasd-controls="enabled: false">
                 <a-entity 
                     cursor="fuse: false"
                     position="0 0 -1"
-                    geometry="primitive: ring; radiusInner: 0.03; radiusOuter: 0.04"
-                    material="color: #00ffcc; shader: flat; opacity: 0.9"
-                    animation__click="property: scale; startEvents: click; from: 0.8 0.8 0.8; to: 1.2 1.2 1.2; dur: 100; dir: alternate"
-                    raycaster="objects: .clickable">
+                    geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+                    material="color: red; shader: flat">
                 </a-entity>
             </a-camera>
         </a-entity>
 
-        <a-light type="ambient" color="#FFF" intensity="1.5"></a-light>
-        <a-light type="directional" position="-1 2 1" intensity="1.0"></a-light>
+        <a-box class="target" position="0 1.6 -3" color="red" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
+        <a-box class="target" position="3 1.6 0" color="blue" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
+        <a-box class="target" position="-3 1.6 0" color="yellow" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
+        <a-box class="target" position="0 1.6 3" color="green" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
 
-        <a-entity id="game-world"></a-entity>
+        <a-light type="ambient" color="#FFF"></a-light>
     </a-scene>
 
     <script>
-        // --- Sound System (変更なし) ---
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const SoundFX = {
-            playTone: (freq, type, duration) => {
-                if(audioCtx.state === 'suspended') audioCtx.resume();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = type;
-                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(); osc.stop(audioCtx.currentTime + duration);
-            },
-            shoot: () => {
-                if(audioCtx.state === 'suspended') audioCtx.resume();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.frequency.setValueAtTime(600, audioCtx.currentTime); // 少しマイルドな音に
-                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
-            },
-            explosion: () => { SoundFX.playTone(100, 'sawtooth', 0.3); }
-        };
-
-        // --- 設定 ---
-        const CONFIG = {
-            maxEnemies: 5,        // 同時に出る敵の数
-            spawnInterval: 2000   // 敵が補充されるチェック間隔
-        };
-
-        let state = { score: 0, isPlaying: false };
-
         const els = {
-            score: document.getElementById('score-display'),
-            world: document.getElementById('game-world'),
-            messageScreen: document.getElementById('message-screen'),
-            startBtn: document.getElementById('start-btn'),
-            video: document.getElementById('cam-video')
+            video: document.getElementById('cam-video'),
+            startScreen: document.getElementById('start-screen'),
+            btn: document.getElementById('btn-permission'),
+            camera: document.getElementById('player-camera'),
+            debug: document.getElementById('debug-info'),
+            radar: document.getElementById('radar')
         };
 
         // カメラ起動
         async function startCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" }, audio: false 
+                });
                 els.video.srcObject = stream;
-            } catch (e) { console.warn("Camera error:", e); }
+            } catch (e) {
+                console.error(e);
+                els.debug.innerText = "Error: Camera denied.";
+            }
         }
 
-        // 敵の生成
-        function spawnEnemy() {
-            if (!state.isPlaying) return;
+        // iOS 13+ ジャイロセンサー許可リクエスト & 開始
+        els.btn.addEventListener('click', async () => {
+            // iOS向けの権限リクエスト
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    if (response === 'granted') {
+                        startApp();
+                    } else {
+                        alert("センサーの許可がないとARは動きません。");
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert("センサーエラー: " + e);
+                }
+            } else {
+                // AndroidやPCなど
+                startApp();
+            }
+        });
 
-            const enemy = document.createElement('a-entity');
-            enemy.setAttribute('class', 'clickable enemy');
-            enemy.setAttribute('gltf-model', '#enemy-model-glb');
-            
-            // 視認性重視：大きく、近く
-            enemy.setAttribute('scale', '2.0 2.0 2.0');
-
-            // 配置：半径 3m 〜 5m
-            const r = 3 + Math.random() * 2; 
-            const theta = Math.random() * 360; // 全方位
-            const phi = Math.random() * 30 - 5; // 高さ：目の高さ中心に少し上下
-            
-            const x = r * Math.cos(theta * Math.PI / 180);
-            const y = r * Math.sin(phi * Math.PI / 180) + 1.6; // 1.6はカメラの高さ基準
-            const z = r * Math.sin(theta * Math.PI / 180);
-
-            enemy.setAttribute('position', `${x} ${y} ${z}`);
-            enemy.setAttribute('look-at', '[camera]'); // 常にこちらを見る
-            
-            // アニメーション：ふわふわ漂うだけ
-            enemy.setAttribute('animation', `property: position; to: ${x} ${y + 0.5} ${z}; dir: alternate; dur: 3000; loop: true; easing: easeInOutSine`);
-
-            // クリックイベント
-            enemy.addEventListener('click', () => destroyEnemy(enemy));
-
-            els.world.appendChild(enemy);
-        }
-
-        // 敵の撃破処理
-        function destroyEnemy(enemy) {
-            SoundFX.explosion();
-            
-            // アニメーション停止＆死亡エフェクト
-            enemy.removeAttribute('animation');
-            enemy.setAttribute('animation__die', 'property: scale; to: 0 0 0; dur: 200; easing: easeInQuad');
-            
-            // スコア加算
-            state.score += 100;
-            els.score.innerText = state.score;
-
-            // 削除
-            setTimeout(() => { 
-                if(enemy.parentNode) enemy.parentNode.removeChild(enemy);
-                // すぐに次を補充して、常に敵がいる状態を保つ
-                spawnEnemy();
-            }, 200);
-        }
-
-        // ゲーム開始
-        function startGame() {
-            state.score = 0;
-            state.isPlaying = true;
-            els.score.innerText = "0";
-            els.world.innerHTML = '';
-            els.messageScreen.style.display = 'none';
+        function startApp() {
+            els.startScreen.style.display = 'none';
             startCamera();
             
-            // 最初に5体出す
-            for(let i=0; i<CONFIG.maxEnemies; i++) spawnEnemy();
-            
-            // 敵が少なくなったら補充する監視ループ
-            setInterval(() => {
-                if(state.isPlaying && document.querySelectorAll('.enemy').length < CONFIG.maxEnemies) {
-                    spawnEnemy();
-                }
-            }, CONFIG.spawnInterval);
+            // look-controlsを有効化 (センサー連動開始)
+            els.camera.setAttribute('look-controls', 'enabled: true');
+
+            // 監視ループ開始
+            requestAnimationFrame(updateLoop);
         }
 
-        // イベントリスナー
-        els.startBtn.addEventListener('click', () => {
-            if(audioCtx.state === 'suspended') audioCtx.resume();
-            SoundFX.shoot();
-            startGame();
-        });
+        // 毎フレーム実行されるループ
+        function updateLoop() {
+            // 1. カメラの回転情報を取得して表示 (デバッグ用)
+            const rot = els.camera.getAttribute('rotation');
+            if (rot) {
+                // 小数点以下を丸める
+                const x = Math.round(rot.x);
+                const y = Math.round(rot.y);
+                const z = Math.round(rot.z);
+                
+                // 画面左上に表示
+                els.debug.innerText = `ROTATION: X=${x} Y=${y} Z=${z}`;
 
-        // 画面タップで発射音
-        document.body.addEventListener('click', (e) => {
-            if(!state.isPlaying || e.target === els.startBtn) return;
-            SoundFX.shoot();
-        });
+                // 数値が変化しない＝センサーが死んでいる
+            }
 
+            // 2. 一番近いターゲットを探して方向を表示する
+            // カメラのY回転角度 (0〜360)
+            let camY = rot ? rot.y % 360 : 0;
+            if (camY < 0) camY += 360;
+
+            // 簡易的なナビゲーションロジック
+            // 正面(0)にある赤い箱を基準にする
+            // ターゲットは Z=-3 (RotY=0), X=3 (RotY=270/left), X=-3 (RotY=90/right), Z=3 (RotY=180)
+            
+            // 真正面の赤い箱への角度差分
+            // 0度(北)付近にいるかどうか
+            if (camY > 340 || camY < 20) {
+                els.radar.innerText = "★ 正面に見えるはず ★";
+                els.radar.style.color = "red";
+            } else if (camY >= 20 && camY < 180) {
+                els.radar.innerText = "← 左を見て！";
+                els.radar.style.color = "yellow";
+            } else {
+                els.radar.innerText = "右を見て！ →";
+                els.radar.style.color = "yellow";
+            }
+
+            requestAnimationFrame(updateLoop);
+        }
     </script>
 </body>
 </html>
