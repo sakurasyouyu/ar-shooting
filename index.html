@@ -3,77 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Test Mode</title>
+    <title>WebAR Shooter Fix</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; background-color: #333; }
+        /* 基本設定 */
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: black; }
+
+        /* 【重要】Pixel対策：レイヤー順序の強制指定 */
         
+        /* 1. カメラ映像は一番奥 (z-index: 0) */
+        #cam-video {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 0;
+        }
+
+        /* 2. A-Frameのキャンバスは一番手前 (z-index: 100) */
+        .a-canvas {
+            display: block !important;
+            position: fixed !important;
+            top: 0; left: 0;
+            z-index: 100 !important;
+            background-color: transparent !important;
+        }
+
+        /* 3. UIはさらにその手前 (z-index: 200) */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 100;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            pointer-events: none; z-index: 200;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        /* スタート画面 */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 300; pointer-events: auto;
         }
         
-        .msg-box {
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 20px;
-            text-align: center;
+        /* スコア表示 */
+        #score-box {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #00ffcc;
+            padding: 10px 30px;
+            border-radius: 30px;
             border: 2px solid #00ffcc;
-            pointer-events: auto;
+            font-size: 24px;
+            font-weight: bold;
         }
 
         button {
-            margin-top: 15px;
-            padding: 10px 30px;
-            font-size: 18px;
-            background: #00ffcc;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
+            padding: 15px 40px; font-size: 20px; font-weight: bold;
+            background: #00ffcc; border: none; border-radius: 50px; cursor: pointer;
         }
     </style>
 </head>
 <body>
 
+    <video id="cam-video" autoplay muted playsinline></video>
+
+    <div id="start-screen">
+        <h1 style="color:#00ffcc;">AR SHOOTER</h1>
+        <p style="color:white; text-align:center;">
+            Pixel対応版<br>
+            カメラ許可後にゲームが始まります
+        </p>
+        <button id="start-btn">GAME START</button>
+    </div>
+
     <div id="ui-layer">
-        <div class="msg-box" id="msg-box">
-            <h2>3D表示テスト</h2>
-            <p>
-                今はカメラをOFFにしています。<br>
-                背景が黒い状態で、<br>
-                <strong>目の前の「青い箱」</strong>と<br>
-                <strong>周りの「赤い敵」</strong>が見えますか？
-            </p>
-            <p style="font-size: 12px; color: #aaa;">
-                ※見えない場合、ブラウザの<br>「ハードウェアアクセラレーション」が<br>無効になっている可能性があります。
-            </p>
+        <div style="width:100%; display:flex; justify-content:center;">
+            <div id="score-box">SCORE: <span id="score-val">0</span></div>
+        </div>
+        <div style="text-align:center; color:white; padding-bottom:20px; text-shadow:1px 1px 0 #000;">
+            <p>赤く光る敵を探してタップ！</p>
         </div>
     </div>
 
-    <a-scene background="color: black">
+    <a-scene embedded renderer="alpha: true; antialias: true" vr-mode-ui="enabled: false">
         
+        <a-assets>
+            <a-mixin id="enemy-mat" material="color: red; emissive: #ff0000; emissiveIntensity: 0.8; opacity: 0.9"></a-mixin>
+        </a-assets>
+
         <a-entity id="camera-rig">
             <a-camera position="0 1.6 0" look-controls="enabled: true" wasd-controls="enabled: false">
-                <a-box color="blue" position="0 -0.5 -1.5" scale="0.3 0.3 0.3" 
-                       animation="property: rotation; to: 0 360 0; loop: true; dur: 3000">
-                </a-box>
                 
-                <a-ring color="white" radius-inner="0.02" radius-outer="0.03" position="0 0 -1"></a-ring>
+                <a-entity 
+                    cursor="fuse: false"
+                    position="0 0 -1"
+                    geometry="primitive: ring; radiusInner: 0.03; radiusOuter: 0.04"
+                    material="color: #00ffcc; shader: flat; opacity: 0.8"
+                    animation__click="property: scale; startEvents: click; from: 0.5 0.5 0.5; to: 1 1 1; dur: 150"
+                    raycaster="objects: .collidable">
+                </a-entity>
+
             </a-camera>
         </a-entity>
 
         <a-light type="ambient" color="#FFF" intensity="1.5"></a-light>
         <a-light type="directional" position="-1 2 1" intensity="1"></a-light>
 
-        <a-sphere color="red" position="0 1.6 -4" radius="1.0"></a-sphere>
-        <a-sphere color="red" position="4 1.6 0" radius="1.0"></a-sphere>
-        <a-sphere color="red" position="-4 1.6 0" radius="1.0"></a-sphere>
-        <a-sphere color="red" position="0 1.6 4" radius="1.0"></a-sphere>
+        <a-entity id="enemy-container"></a-entity>
 
     </a-scene>
 
+    <script>
+        // 設定
+        const CONFIG = {
+            maxEnemies: 5,     // 同時出現数
+            spawnDist: 4       // プレイヤーからの距離(m)
+        };
+
+        let state = { score: 0, isPlaying: false };
+        const els = {
+            video: document.getElementById('cam-video'),
+            container: document.getElementById('enemy-container'),
+            score: document.getElementById('score-val'),
+            startScreen: document.getElementById('start-screen'),
+            startBtn: document.getElementById('start-btn')
+        };
+
+        // サウンド
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            if (type === 'shoot') {
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'explode') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            }
+        }
+
+        // カメラ起動
+        async function startCamera() {
+            try {
+                // PixelなどAndroidの背面カメラを確実に取得
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" }, 
+                    audio: false 
+                });
+                els.video.srcObject = stream;
+            } catch (err) {
+                console.error("Camera Error:", err);
+                alert("カメラの起動に失敗しました。");
+            }
+        }
+
+        // 敵の生成 (視認性重視の赤い球体)
+        function spawnEnemy() {
+            if(!state.isPlaying) return;
+
+            const enemy = document.createElement('a-entity');
+            enemy.setAttribute('class', 'collidable enemy');
+            
+            // 赤い球体 + 枠線のようなリング (見つけやすくする)
+            enemy.innerHTML = `
+                <a-sphere radius="0.6" color="red" opacity="0.8" emissive="#500" emissiveIntensity="0.5"></a-sphere>
+                <a-ring radius-inner="0.7" radius-outer="0.8" color="yellow" animation="property: rotation; to: 0 360 0; loop: true; dur: 3000"></a-ring>
+            `;
+
+            // 位置決定: プレイヤーの周囲 4m
+            const angle = Math.random() * 360;
+            const rad = angle * (Math.PI / 180);
+            const x = CONFIG.spawnDist * Math.cos(rad);
+            const z = CONFIG.spawnDist * Math.sin(rad);
+            const y = 1.6 + (Math.random() * 2 - 1); // 目の高さ ±1m
+
+            enemy.setAttribute('position', `${x} ${y} ${z}`);
+            enemy.setAttribute('look-at', '[camera]');
+
+            // 撃破イベント
+            enemy.addEventListener('click', () => {
+                playSound('explode');
+                
+                // エフェクト
+                enemy.setAttribute('animation', 'property: scale; to: 0 0 0; dur: 200; easing: easeInBack');
+                
+                // スコア
+                state.score += 100;
+                els.score.innerText = state.score;
+
+                // 削除 & 再生成
+                setTimeout(() => {
+                    if(enemy.parentNode) enemy.parentNode.removeChild(enemy);
+                    spawnEnemy();
+                }, 200);
+            });
+
+            els.container.appendChild(enemy);
+        }
+
+        // ゲーム開始
+        els.startBtn.addEventListener('click', () => {
+            state.isPlaying = true;
+            els.startScreen.style.display = 'none';
+            playSound('shoot'); // 音声コンテキスト有効化
+            
+            startCamera();
+
+            // 敵を5体配置
+            for(let i=0; i<CONFIG.maxEnemies; i++) {
+                spawnEnemy();
+            }
+        });
+
+        // 画面タップで発射音
+        document.body.addEventListener('click', (e) => {
+            if(state.isPlaying && e.target !== els.startBtn) {
+                playSound('shoot');
+            }
+        });
+
+    </script>
 </body>
 </html>
