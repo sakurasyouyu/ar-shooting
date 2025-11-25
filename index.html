@@ -3,48 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>WebAR Diagnostic Mode</title>
+    <title>WebAR Pixel Fix</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: black; }
         
-        /* UIレイヤー */
+        /* 【重要】Pixel/Android用レイヤー修正 */
+        /* カメラ映像を一番奥へ */
+        #cam-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 0; /* 一番奥 */
+        }
+
+        /* A-Frameの描画キャンバスを強制的に手前へ */
+        .a-canvas {
+            z-index: 999 !important;
+            background-color: transparent !important;
+            position: absolute !important;
+            top: 0;
+            left: 0;
+        }
+
+        /* UI */
         #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; z-index: 100;
+            pointer-events: none; z-index: 1000;
             display: flex; flex-direction: column; justify-content: space-between;
         }
-
-        /* センサー許可・開始ボタン画面 */
-        #start-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            pointer-events: auto;
-            z-index: 200;
-        }
-        button {
-            background: #00ff00; color: black; border: none; padding: 20px 40px;
-            font-size: 20px; font-weight: bold; border-radius: 10px; margin-top: 20px;
-        }
-
-        /* デバッグ情報表示エリア */
-        #debug-info {
-            background: rgba(0,0,0,0.5); color: #00ff00; padding: 5px; font-size: 12px;
-            font-family: monospace;
-        }
-
-        /* 敵への誘導ナビゲーション */
-        #radar {
-            text-align: center; font-size: 40px; font-weight: bold; color: yellow;
-            text-shadow: 2px 2px 0 #000; padding-bottom: 50px;
-        }
-
-        /* 背景ビデオ */
-        #cam-video {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: cover; z-index: -1;
+        #msg {
+            background: rgba(0,0,0,0.7);
+            color: #00ffcc;
+            padding: 10px;
+            text-align: center;
+            margin-top: 50px;
+            font-size: 16px;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -52,135 +52,67 @@
 
     <video id="cam-video" autoplay muted playsinline></video>
 
-    <div id="start-screen">
-        <h1 style="color:white; text-align:center;">システム診断モード</h1>
-        <p style="color:#ccc; text-align:center; padding:0 20px;">
-            iPhoneの方は必ず下のボタンを押して<br>「動作と方向へのアクセス」を<br>許可してください。
-        </p>
-        <button id="btn-permission">センサーを許可して開始</button>
-    </div>
-
     <div id="ui-layer">
-        <div id="debug-info">Waiting for sensor...</div>
-        <div id="radar">SEARCHING...</div>
+        <div id="msg">
+            画面中央に「青い箱」が見えますか？<br>
+            見えたらスマホを左右に回して<br>
+            「赤い敵」を探してください。
+        </div>
     </div>
 
-    <a-scene vr-mode-ui="enabled: false" embedded renderer="alpha: true;">
+    <a-scene vr-mode-ui="enabled: false" embedded renderer="alpha: true; antialias: true; colorManagement: true;">
         
         <a-entity id="camera-rig">
-            <a-camera id="player-camera" position="0 1.6 0" look-controls="enabled: false" wasd-controls="enabled: false">
-                <a-entity 
-                    cursor="fuse: false"
-                    position="0 0 -1"
-                    geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
-                    material="color: red; shader: flat">
-                </a-entity>
+            <a-camera position="0 1.6 0" look-controls="enabled: true" wasd-controls="enabled: false">
+                
+                <a-box color="blue" position="0 -0.5 -1.5" scale="0.3 0.3 0.3" 
+                       animation="property: rotation; to: 0 360 0; loop: true; dur: 3000">
+                </a-box>
+                
+                <a-ring color="white" radius-inner="0.02" radius-outer="0.03" position="0 0 -1"></a-ring>
+            
             </a-camera>
         </a-entity>
 
-        <a-box class="target" position="0 1.6 -3" color="red" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
-        <a-box class="target" position="3 1.6 0" color="blue" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
-        <a-box class="target" position="-3 1.6 0" color="yellow" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
-        <a-box class="target" position="0 1.6 3" color="green" scale="0.5 0.5 0.5" animation="property: rotation; to: 0 360 0; loop: true; dur: 2000"></a-box>
+        <a-light type="ambient" color="#FFF" intensity="1.5"></a-light>
+        <a-light type="directional" position="-1 2 1" intensity="1"></a-light>
 
-        <a-light type="ambient" color="#FFF"></a-light>
+        <a-sphere color="red" position="0 1.6 -4" radius="1.0"></a-sphere>
+        <a-sphere color="red" position="4 1.6 0" radius="1.0"></a-sphere>
+        <a-sphere color="red" position="-4 1.6 0" radius="1.0"></a-sphere>
+        <a-sphere color="red" position="0 1.6 4" radius="1.0"></a-sphere>
+
     </a-scene>
 
     <script>
-        const els = {
-            video: document.getElementById('cam-video'),
-            startScreen: document.getElementById('start-screen'),
-            btn: document.getElementById('btn-permission'),
-            camera: document.getElementById('player-camera'),
-            debug: document.getElementById('debug-info'),
-            radar: document.getElementById('radar')
-        };
-
-        // カメラ起動
+        // カメラ起動処理
+        const video = document.getElementById('cam-video');
+        
         async function startCamera() {
             try {
+                // PixelなどAndroidの背面カメラを取得
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" }, audio: false 
+                    video: { 
+                        facingMode: { exact: "environment" } // 背面カメラを強制
+                    }, 
+                    audio: false 
                 });
-                els.video.srcObject = stream;
-            } catch (e) {
-                console.error(e);
-                els.debug.innerText = "Error: Camera denied.";
-            }
-        }
-
-        // iOS 13+ ジャイロセンサー許可リクエスト & 開始
-        els.btn.addEventListener('click', async () => {
-            // iOS向けの権限リクエスト
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                video.srcObject = stream;
+            } catch (err) {
+                console.warn("背面カメラの取得に失敗、通常モードで試行します", err);
                 try {
-                    const response = await DeviceOrientationEvent.requestPermission();
-                    if (response === 'granted') {
-                        startApp();
-                    } else {
-                        alert("センサーの許可がないとARは動きません。");
-                    }
-                } catch (e) {
-                    console.error(e);
-                    alert("センサーエラー: " + e);
+                    const streamKv = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    video.srcObject = streamKv;
+                } catch(e) {
+                    alert("カメラの起動に失敗しました。ブラウザの設定を確認してください。");
                 }
-            } else {
-                // AndroidやPCなど
-                startApp();
             }
-        });
+        }
 
-        function startApp() {
-            els.startScreen.style.display = 'none';
+        // ページ読み込み完了時にカメラ起動
+        window.onload = () => {
             startCamera();
-            
-            // look-controlsを有効化 (センサー連動開始)
-            els.camera.setAttribute('look-controls', 'enabled: true');
-
-            // 監視ループ開始
-            requestAnimationFrame(updateLoop);
-        }
-
-        // 毎フレーム実行されるループ
-        function updateLoop() {
-            // 1. カメラの回転情報を取得して表示 (デバッグ用)
-            const rot = els.camera.getAttribute('rotation');
-            if (rot) {
-                // 小数点以下を丸める
-                const x = Math.round(rot.x);
-                const y = Math.round(rot.y);
-                const z = Math.round(rot.z);
-                
-                // 画面左上に表示
-                els.debug.innerText = `ROTATION: X=${x} Y=${y} Z=${z}`;
-
-                // 数値が変化しない＝センサーが死んでいる
-            }
-
-            // 2. 一番近いターゲットを探して方向を表示する
-            // カメラのY回転角度 (0〜360)
-            let camY = rot ? rot.y % 360 : 0;
-            if (camY < 0) camY += 360;
-
-            // 簡易的なナビゲーションロジック
-            // 正面(0)にある赤い箱を基準にする
-            // ターゲットは Z=-3 (RotY=0), X=3 (RotY=270/left), X=-3 (RotY=90/right), Z=3 (RotY=180)
-            
-            // 真正面の赤い箱への角度差分
-            // 0度(北)付近にいるかどうか
-            if (camY > 340 || camY < 20) {
-                els.radar.innerText = "★ 正面に見えるはず ★";
-                els.radar.style.color = "red";
-            } else if (camY >= 20 && camY < 180) {
-                els.radar.innerText = "← 左を見て！";
-                els.radar.style.color = "yellow";
-            } else {
-                els.radar.innerText = "右を見て！ →";
-                els.radar.style.color = "yellow";
-            }
-
-            requestAnimationFrame(updateLoop);
-        }
+        };
     </script>
 </body>
 </html>
